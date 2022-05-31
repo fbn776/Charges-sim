@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta name="viewport" content="width= device-width, initial-scale=1.0">
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: monospace;
+      font-weight: 800;
+      user-select: none;
+    }
+
+    *:focus {
+      outline: none;
+    }
+
+    body {
+      margin: 0px;
+      height: 100vh;
+    }
+
+    lg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 9999;
+      width: 100%;
+      overflow: scroll;
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+
+    #main {
+      z-index: 1;
+    }
+
+    #debug {
+      z-index: 2;
+    }
+
+    #eraser {
+      z-index: 3;
+    }
+
+    #open_ctrl {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      opacity: 0.7;
+      z-index: 3;
+      padding: 10px;
+    }
+
+    .controls {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 250px;
+      width: 100%;
+      border-top: 3px solid #212121;
+      background: rgba(255, 255, 255, 0.9);
+      z-index: 4;
+      overflow: hidden;
+      transition: transform 0.2s, height 0.1s;
+      display: none;
+      transform: translateY(100%);
+    }
+
+    .controls .top {
+      position: absolute;
+      top: 0;
+      width: 100%;
+      background: white;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      padding: 0px 15px;
+      border-bottom: 2px solid rgba(33, 33, 33, 0.1)
+    }
+
+    .controls .top label {
+      font-size: 15px;
+    }
+
+    .controls .top button {
+      position: absolute;
+      right: 10px;
+    }
+
+    .controls .cont {
+      position: absolute;
+      top: 50px;
+      height: calc(100% - 50px);
+      width: 100%;
+      overflow: scroll;
+      padding-right: 10%;
+    }
+
+    .controls .cont .input-cont {
+      position: relative;
+      width: 100%;
+      padding: 10px 15px;
+    }
+
+    .controls .cont .input-cont p {
+      margin: 4px;
+    }
+
+    .controls .cont .input-cont input[type="range"] {
+      width: 100%;
+    }
+
+    .controls .cont .input-cont button {
+      padding: 5px 5px;
+      border: 1.5px solid #212121;
+      border-radius: 4px
+    }
+  </style>
+</head>
+
+<body>
+  <lg></lg>
+  <div class="canvas">
+    <canvas id="main"></canvas>
+    <canvas id="debug"></canvas>
+    <canvas id="eraser"></canvas>
+  </div>
+
+  <!--Control elements-->
+  <button id="open_ctrl" onclick="openControl()">Controls</button>
+  <div class="controls">
+    <div class="top">
+      <label>Controls</label>
+      <button id="close_ctrl" onclick="closeControl()">Close</button>
+    </div>
+    <div class="cont"></div>
+  </div>
+
+  <script src="lib/canvas.js"></script>
+  <script src="lib/vector.js"></script>
+  <script src="lib/lib.js"></script>
+  <script>
+    const lg = new Log(s("lg"));
+  </script>
+  <script src="script/classes.js"></script>
+  <script src="script/works.js"></script>
+  <script src="script/main.js"></script>
+  <script>
+    let control_cont = s(".controls .cont");
+    let control_elm = s(".controls");
+
+    function openControl() {
+      control_elm.style.display = "block"
+      setTimeout(() => {
+        control_elm.style.transform = "translateY(0%)"
+      }, 0)
+    }
+
+    function closeControl() {
+      control_elm.setStyle({
+        transform: "translateY(100%)",
+      });
+      setTimeout(() => {
+        control_elm.style.display = "none"
+      }, 200);
+    }
+
+
+    function addInputCont(name, obj) {
+      let cont = document.createElement("div");
+      cont.setAttr({
+        class: "input-cont",
+      });
+      if (obj.type != "button") {
+        let p = document.createElement("p");
+        p.innerHTML = name;
+        cont.appendChild(p);
+
+        if (obj.type == "range") {
+          let label = document.createElement("label")
+          label.innerHTML = " (" + obj.value + ")";
+          p.appendChild(label);
+          let input = createElm("input", {
+            attribute: {
+              type: "range",
+              min: obj.min || 0,
+              max: obj.max || 10,
+              step: obj.step || 1,
+              value: obj.value,
+            }
+          });
+          input.addEventListener("input", function() {
+            label.innerHTML = " (" + this.value + ")";
+            obj.affects.obj[obj.affects.key] = parseFloat(this.value);
+            if (obj.affects.onChange) {
+              obj.affects.onChange(parseFloat(this.value), this)
+            }
+          });
+          cont.appendChild(input);
+        }
+
+        if (obj.type == "checkbox") {
+          p.setStyle({
+            display: "flex",
+            alignItems: "center",
+            width: "100%",
+          });
+          let input = createElm("input", {
+            attribute: {
+              type: "checkbox",
+            },
+            style: {
+              position: "absolute",
+              right: "10px"
+            }
+          });
+          input.checked = obj.checked || false;
+          input.addEventListener("input", function() {
+            obj.affects.obj[obj.affects.key] = Boolean(input.checked);
+          });
+          p.appendChild(input)
+        }
+      } else {
+        let input = document.createElement("button");
+        input.innerHTML = name;
+        input.onclick = function() {
+          obj.affects(this);
+        }
+        cont.appendChild(input)
+      }
+      control_cont.appendChild(cont)
+    }
+
+
+    addInputCont("Radius", {
+      type: "range",
+      min: 1,
+      max: 50,
+      value: 10,
+      step: 1,
+      affects: { obj: properties, key: "radius" }
+    });
+    addInputCont("Mass", {
+      type: "range",
+      min: 1,
+      max: 60,
+      value: 1,
+      step: 1,
+      affects: { obj: properties, key: "mass" }
+    });
+    addInputCont("Charge", {
+      type: "range",
+      min: -3,
+      max: 3,
+      value: 0,
+      affects: { obj: properties, key: "charge" }
+    });
+    addInputCont("Air Friction", {
+      type: "range",
+      min: 0,
+      max: 1,
+      step: 0.01,
+      value: 0.99,
+      affects: { obj: properties, key: "airFriction" }
+    });
+    addInputCont("Restitution", {
+      type: "range",
+      min: 0,
+      max: 1,
+      step: 0.01,
+      value: 0.9,
+      affects: { obj: properties, key: "cor" }
+    });
+    addInputCont("Velocity X", {
+      type: "range",
+      min: -300,
+      max: 300,
+      step: 1,
+      value: 0,
+      affects: { obj: properties, key: "velX" }
+    });
+    addInputCont("Velocity Y", {
+      type: "range",
+      min: -300,
+      max: 300,
+      step: 1,
+      value: 0,
+      affects: { obj: properties, key: "velY" }
+    });
+
+    addInputCont("Garvity", {
+      type: "checkbox",
+      affects: { obj: properties, key: "enable_gravity" }
+    });
+    addInputCont("Fixed", {
+      type: "checkbox",
+      affects: { obj: properties, key: "fixed" }
+    });
+    addInputCont("Draw Axis line (Debug)", {
+      type: "checkbox",
+      affects: { obj: properties, key: "axis_debug", }
+    });
+    addInputCont("Draw Force line (Debug)", {
+      type: "checkbox",
+      affects: { obj: properties, key: "force_debug", }
+    });
+
+    addInputCont("Pause", {
+      type: "checkbox",
+      affects: { obj: properties, key: "pause", }
+    });
+    addInputCont("Speed", {
+      type: "range",
+      min: 0,
+      max: 2,
+      step: 0.1,
+      value: 1,
+      affects: {
+        obj: properties,
+        key: "sim_speed",
+      }
+    });
+
+    addInputCont("Height", {
+      type: "range",
+      min: 120,
+      max: height,
+      step: 1,
+      value: 250,
+      affects: {
+        obj: properties,
+        key: "ctrl_width",
+        onChange: function(val, t) {
+          //t.scrollIntoView(false)
+          control_elm.style.height = val + "px"
+        }
+      }
+    });
+
+    addInputCont("Eraser Size", {
+      type: "range",
+      min: 2,
+      max: 100,
+      step: 1,
+      value: 10,
+      affects: {
+        obj: properties,
+        key: "eraser_size",
+        onChange: function(val) {
+          //A preview of the eraser brush size;
+          eraser.ctx.clearRect(0, 0, cw, ch);
+          last_erased = Date.now()
+          eraser_cleared = false;
+          eraser.ctx.beginPath();
+          eraser.ctx.arc(cx, cy, val, 0, twoPi);
+          eraser.ctx.stroke();
+          eraser.ctx.closePath();
+        }
+      }
+    });
+
+    addInputCont("Clear Canvas", {
+      type: "button",
+      affects: function() {
+        let confo = confirm("Do you want to clear the canvas?")
+        if (confo) {
+          balls = [];
+        }
+      }
+    });
+    addInputCont("Erase Mode", {
+      type: "button",
+      affects: function(t) {
+        properties.eraseMode = !properties.eraseMode;
+        if (properties.eraseMode) {
+          t.style.borderColor = "red";
+          t.style.color = "red"
+        } else {
+          t.style.borderColor = "#212121";
+          t.style.color = "black"
+        }
+      }
+    });
+  </script>
+</body>
+
+</html>
